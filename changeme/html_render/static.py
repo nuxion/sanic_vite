@@ -7,10 +7,9 @@ class Static(StandaloneTag):
     def __init__(self, environment):
         super().__init__(environment)
         # environment.extend(vite_metadata_prefix="", vite_metadata=None)
-        environment.extend(vite_dev_mod_prefix="", vite_dev_mode=None)
-        environment.extend(vite_dev_server_prefix="", vite_dev_server=None)
+        environment.extend(staticfiles_prefix="", staticfiles=None)
 
-    def render(self, script_name="main.js"):
-        _url = f"{self.environment.vite_dev_server}/{script_name}"
-        if self.environment.vite_dev_mode:
-            return f"""<script type="module" src="{_url}"></script>"""
+    def render(self, static_file):
+        # static_dir = self.environment.staticfiles[static_key]
+        static_dir = self.environment.staticfiles["public"]["uripath"]
+        return f"{static_dir}{static_file}"

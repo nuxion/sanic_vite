@@ -2,16 +2,15 @@
 # pylint: disable=line-too-long
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
+from changeme.types.config import Settings
+from changeme.utils import open_json
 from jinja2 import (Environment, FileSystemLoader, PackageLoader, Template,
                     select_autoescape)
 from jinja2.ext import Extension
 from sanic import Sanic
 
-
-def vite_dev():
-    return """
-<script type="module" src="http://localhost:3000/static/main.js"></script>
-"""
+from .static import Static
+from .vite import ViteAsset, ViteDev
 
 
 class Render:
@@ -76,6 +75,24 @@ class Render:
         """
         self.env.add_extension(ext)
 
+    def add_vite(self, app: Sanic, settings: Settings):
+        manifest_json = open_json(
+            f"{settings.BASE_PATH}/{settings.VITE_OUTPUT_DIR}/manifest.json"
+        )
+        dev_server = f"{settings.VITE_DEV_SERVER}/{settings.VITE_BASE}"
+        self.add_extension(ViteDev)
+        self.add_extension(ViteAsset)
+        self.add_extension(Static)
+        self.env.vite_dev_server = dev_server
+        self.env.vite_dev_mode = settings.VITE_DEV_MODE
+        self.env.vite_react_mode = settings.VITE_REACT_MODE
+        self.env.vite_manifest = manifest_json
+        self.env.static_url = settings.STATIC_URL
+        self.env.staticfiles = settings.STATICFILES_DIRS
+        if settings.VITE_DEV_MODE:
+            static_dir = f"{settings.BASE_PATH}/{settings.VITE_STATIC_DIR}"
+            app.static(settings.VITE_STATIC_URL_PATH, static_dir)
+
     def init_app(self, app: Sanic):
         """ 
         add render as part of the context and add url_for to be used
@@ -83,7 +100,6 @@ class Render:
         """
         app.ctx.render = self
         self.env.globals.update(url_for=app.url_for)
-        # self.env.globals.update(vite_dev=vite_dev)
 
     async def async_render(self, request, tpl_name, **kwargs):
         template = self.env.get_template(tpl_name)

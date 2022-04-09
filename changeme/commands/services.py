@@ -1,6 +1,7 @@
 import multiprocessing as mp
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -8,7 +9,6 @@ import click
 from changeme.utils import execute_cmd, mkdir_p
 from rich.console import Console
 from rich.prompt import Confirm
-import subprocess
 
 console = Console()
 
@@ -54,7 +54,7 @@ def run_vite():
 def webcli(host, port, workers, services, pages, auto_reload, access_log, debug, vite_server):
     """Run Web Server"""
     # pylint: disable=import-outside-toplevel
-    from changeme.server import app_init
+    from changeme.server import create_app
     from changeme.types.config import Settings
 
     pwd = os.getcwd()
@@ -69,7 +69,7 @@ def webcli(host, port, workers, services, pages, auto_reload, access_log, debug,
     if pages:
         pages_bp = pages.split(",")
 
-    app = app_init(settings, services_bp=services_bp, pages_bp=pages_bp)
+    app = create_app(settings, services_bp=services_bp, pages_bp=pages_bp, with_vite=True)
     w = int(workers)
     console.print(f"Debug mode: {debug}")
     if not vite_server:
@@ -120,9 +120,9 @@ def collectcli(outputdir, vite_build):
             console.print(f"[bold red]Anything collected[/]")
             sys.exit()
 
-    for k, v in settings.STATICFILES_DIRS.items():
-        dst = Path(f"{output}/{k}")
-        console.print(f"Copying from {v} to {dst}")
+    for _, v in settings.STATICFILES_DIRS.items():
+        dst = Path(f"{output}/{v['localdir']}")
+        console.print(f"Copying from {v['localdir']} to {dst}")
         shutil.copytree(v, str(dst))
         # for file_or_dir in Path(v).glob("**/*"):
         #    print(file_or_dir)

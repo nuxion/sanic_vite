@@ -8,7 +8,8 @@ from sanic_ext import Extend
 
 from changeme import defaults
 from changeme.html_render import Render
-from changeme.html_render.vite import ViteDev
+from changeme.html_render.static import Static
+from changeme.html_render.vite import ViteAsset, ViteDev
 from changeme.types.config import Settings
 from changeme.utils import get_version, open_json, path_norm
 
@@ -36,29 +37,25 @@ def init_blueprints(app, blueprints_allowed, package_dir):
         app.blueprint(bp)
 
 
-def app_init(
+def create_app(
         settings: Settings,
         services_bp: Optional[List[str]] = None,
-        pages_bp: Optional[List[str]] = None
+        pages_bp: Optional[List[str]] = None,
+        with_render=True,
+        with_vite=False
 
-):
+) -> Sanic:
 
     _app = Sanic(settings.SANIC_APP_NAME)
 
     _app.config.CORS_ORIGINS = settings.CORS_ORIGINS
     _app.config.CORS_ALLOW_HEADERS = settings.CORS_ALLOW_HEADERS
 
-    render: Render = Render(searchpath=settings.TEMPLATES_DIR)
-
-    manifest_json = open_json((f"{settings.BASE_PATH}/{settings.VITE_OUTPUT_DIR}/"
-                               "manifest.json"))
-
-    render.init_app(_app)
-    render.add_extension(ViteDev)
-    render.env.vite_dev_server = f"{settings.VITE_DEV_SERVER}/{settings.VITE_BASE}"
-    render.env.vite_dev_mode = settings.VITE_DEV_MODE
-    render.env.vite_static_url = settings.VITE_STATIC_URL_PATH
-    render.env.vite_manifest = manifest_json
+    if with_render:
+        render: Render = Render(searchpath=settings.TEMPLATES_DIR)
+        render.init_app(_app)
+        if with_vite:
+            render.add_vite(_app, settings)
 
     # Extend(_app)
     _app.ext.openapi.add_security_scheme(
@@ -75,13 +72,9 @@ def app_init(
     # _app.ext.openapi.secured()
     _app.ext.openapi.secured("token")
 
-    # _app.static(settings.STATIC_URL_PATH, settings.STATIC_LOCAL_DIR)
-    if settings.VITE_DEV_MODE:
-        static_dir = f"{settings.BASE_PATH}/{settings.VITE_STATIC_DIR}"
-        _app.static(settings.VITE_STATIC_URL_PATH, static_dir)
-
-    for k, v in settings.STATICFILES_DIRS.items():
-        _app.static(k, v)
+    
+    for _, v in settings.STATICFILES_DIRS.items():
+        _app.static(v["uripath"], v["localdir"])
 
     @_app.get("/status")
     async def status_handler(request):
