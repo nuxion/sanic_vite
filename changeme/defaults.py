@@ -4,3 +4,5 @@ SANIC_SERVICES_DIR = "changeme.services"
 SANIC_PAGES_DIR = "changeme.pages"
 
 PROJECT_NAMESPACE = "changeme"
+
+JWT_ALG = "ES512"
