@@ -3,6 +3,8 @@ from typing import Any, Dict, List, Optional, Union
 from changeme import defaults
 from pydantic import BaseSettings
 
+from .security import JWTConfig
+
 
 class Settings(BaseSettings):
     BASE_PATH: str
@@ -24,6 +26,16 @@ class Settings(BaseSettings):
     VITE_DEV_MODE: bool = False
     VITE_REACT_MODE: bool = False
     VITE_BASE: str = "static"
+
+    JWT_ALG: str = defaults.JWT_ALG
+    JWT_EXP: int = 30
+    JWT_PUBLIC: str = "secrets/ecdsa.pub.pem"
+    JWT_PRIVATE: str = "secrets/ecdsa.priv.pem"
+    JWT_REQUIRES_CLAIMS: List[str] = ["exp"]
+    JWT_SECRET: Optional[str] = None
+    JWT_ISS: Optional[str] = None
+    JWT_AUD: Optional[str] = None
+    AUTH_CLASS = "changeme.security.authentication.Auth"
 
     CORS_ORIGINS: Union[List, str] = "*"
     CORS_ALLOW_HEADERS: Union[List, str] = "*"

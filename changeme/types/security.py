@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -10,10 +10,19 @@ class KeyPairs(BaseModel):
 
 class JWTConfig(BaseModel):
     alg: str
-    exp_min: int = 5
-    header_name: str = "authorization"
+    exp_min: int = 30
     keys: Optional[KeyPairs] = None
     secret: Optional[str] = None
     issuer: Optional[str] = None
     audience: Optional[str] = None
     requires_claims: List[str] = ["exp"]
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class JWTResponse(BaseModel):
+    access_token: str
+    refresh_token: Optional[str]

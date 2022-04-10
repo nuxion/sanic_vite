@@ -104,7 +104,7 @@ def webcli(host, port, workers, services, pages, auto_reload, access_log, debug,
 @click.command(name="collectstatic")
 @click.argument("outputdir")
 def collectcli(outputdir, vite_build):
-    """ Collects statics file into one folder """
+    """ Collects statics files into one folder """
     from changeme.types.config import Settings
     root = Path.cwd()
     settings = Settings(BASE_PATH=str(root))
@@ -120,10 +120,11 @@ def collectcli(outputdir, vite_build):
             console.print(f"[bold red]Anything collected[/]")
             sys.exit()
 
+    breakpoint()
     for _, v in settings.STATICFILES_DIRS.items():
         dst = Path(f"{output}/{v['localdir']}")
         console.print(f"Copying from {v['localdir']} to {dst}")
-        shutil.copytree(v, str(dst))
+        shutil.copytree(v['localdir'], str(dst))
         # for file_or_dir in Path(v).glob("**/*"):
         #    print(file_or_dir)
 

@@ -1,9 +1,12 @@
+import os
 from datetime import datetime, timedelta
-import pytest
+
 import jwt
+import pytest
 from changeme import defaults
-from changeme.security.authentication import Auth
-from changeme.security.utils import open_keys
+from changeme.security.authentication import Auth, scope2dict, validate_scopes
+from changeme.security.utils import load_auth_class, open_keys
+from changeme.types.config import Settings
 from changeme.types.security import JWTConfig, KeyPairs
 
 
@@ -28,3 +31,84 @@ def test_auth_Auth_encode():
     assert isinstance(encoded, str)
     assert original["test"] == "hi"
     assert "exp" in original.keys()
+
+
+def test_auth_Auth_from_settings():
+    s = Settings(BASE_PATH=os.getcwd())
+    auth = Auth.from_settings(s)
+    assert isinstance(auth, Auth)
+
+
+def test_auth_scope2dict():
+    scopes = ["user", "admin:read:write", ":read:write"]
+    dict_ = scope2dict(scopes)
+
+    assert "user" in dict_.keys()
+    assert "admin" in dict_.keys()
+    assert len(dict_["admin"]) == 2
+    assert "any" in dict_["user"]
+    assert dict_["any"]
+
+
+def test_auth_validate_scopes():
+    scopes1 = ["user"]
+    required1 = ["something"]
+    valid1 = validate_scopes(required1, scopes1)
+
+    scopes2 = ["user"]
+    required2 = ["user"]
+    valid2 = validate_scopes(required2, scopes2)
+
+    scopes3 = ["user:read"]
+    required3 = ["user"]
+    valid3 = validate_scopes(required3, scopes3)
+
+    scopes4 = ["user:read"]
+    required4 = ["user:write"]
+    valid4 = validate_scopes(required4, scopes4)
+
+    scopes5 = ["user:read"]
+    required5 = ["user:read:write"]
+    valid5 = validate_scopes(required5, scopes5)
+
+    scopes6 = ["user:read"]
+    required6 = ["user:read:write", "admin:write"]
+    valid6 = validate_scopes(required6, scopes6)
+
+    scopes7 = ["user:read"]
+    required7 = ["user:read:write", "admin:write"]
+    valid7 = validate_scopes(required7, scopes7, require_all=False)
+
+    scopes8 = ["user:write"]
+    required8 = [":read"]
+    valid8 = validate_scopes(required8, scopes8)
+
+    scopes9 = [":read"]
+    required9 = [":read"]
+    valid9 = validate_scopes(required9, scopes9)
+
+    scopes10 = [":read"]
+    required10 = ["test:read", "admin:read"]
+    valid10 = validate_scopes(required10, scopes10)
+
+    # it should be valid. It required that namespace match
+    scopes11 = ["user:read"]
+    required11 = [":read"]
+    valid11 = validate_scopes(required11, scopes11)
+
+    assert not valid1
+    assert valid2
+    assert valid3
+    assert not valid4
+    assert valid5
+    assert not valid6
+    assert valid7
+    assert not valid8
+    assert valid9
+    assert not valid10
+    assert not valid11  # review
+
+
+def test_auth_utils_load():
+    A = load_auth_class("changeme.security.authentication.Auth")
+    assert type(A) == type(Auth)

@@ -10,6 +10,7 @@ from changeme import defaults
 from changeme.html_render import Render
 from changeme.html_render.static import Static
 from changeme.html_render.vite import ViteAsset, ViteDev
+from changeme.security import Auth
 from changeme.types.config import Settings
 from changeme.utils import get_version, open_json, path_norm
 
@@ -42,8 +43,8 @@ def create_app(
         services_bp: Optional[List[str]] = None,
         pages_bp: Optional[List[str]] = None,
         with_render=True,
-        with_vite=False
-
+        with_vite=False,
+        auth_bp=True,
 ) -> Sanic:
 
     _app = Sanic(settings.SANIC_APP_NAME)
@@ -58,6 +59,9 @@ def create_app(
             render.add_vite(_app, settings)
 
     # Extend(_app)
+    auth = Auth.from_settings(settings)
+    auth.init_app(_app)
+
     _app.ext.openapi.add_security_scheme(
         "token",
         "http",
@@ -69,10 +73,11 @@ def create_app(
         init_blueprints(_app, services_bp, defaults.SANIC_SERVICES_DIR)
     if pages_bp:
         init_blueprints(_app, services_bp, defaults.SANIC_PAGES_DIR)
+    if auth_bp:
+        init_blueprints(_app, ["auth"], "changeme.security")
     # _app.ext.openapi.secured()
     _app.ext.openapi.secured("token")
 
-    
     for _, v in settings.STATICFILES_DIRS.items():
         _app.static(v["uripath"], v["localdir"])
 
