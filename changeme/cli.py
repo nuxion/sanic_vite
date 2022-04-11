@@ -5,6 +5,7 @@ from rich.console import Console
 
 from changeme.commands.services import webcli
 from changeme.commands.manager import managercli
+from changeme.commands.common import startproject
 
 
 def init_cli():
@@ -29,6 +30,7 @@ def init_cli():
     cli.add_command(version)
     cli.add_command(webcli)
     cli.add_command(managercli)
+    cli.add_command(startproject)
     return cli
 
 
