@@ -7,10 +7,14 @@ from typing import Any, Callable, Dict, List, Optional, Set
 import jwt
 from changeme import defaults
 from changeme.errors.security import AuthValidationFailed
+from changeme.security import scopes
+from changeme.security.utils import generate_token
 from changeme.types.config import Settings
-from changeme.types.security import JWTConfig, UserLogin
+from changeme.types.security import JWTConfig, JWTResponse
+from pydantic.error_wrappers import ValidationError
 from sanic import Request
 
+from .base import AuthSpec
 from .utils import open_keys
 
 
@@ -20,7 +24,28 @@ def _get_delta(delta_min: int) -> int:
     return int(delta.timestamp())
 
 
-class BaseAuth:
+async def store_refresh_token(redis, username: str) -> str:
+    tkn = generate_token()
+    await redis.set(f"rtkn:{tkn}", username)
+    return tkn
+
+
+async def validate_refresh_token(redis, token, user):
+
+    redis_user = await redis.get(f"rtkn:{token}")
+    if redis_user and redis_user == user:
+        return True
+    return False
+
+
+async def renew_refresh_token(redis, old_token, username: str) -> str:
+    tkn = generate_token()
+    async with redis.pipeline() as pipe:
+        await pipe.delete(f"rtkn:{old_token}").set(f"rtkn:{tkn}", username).execute()
+    return tkn
+
+
+class Auth(AuthSpec):
 
     def __init__(self, conf: JWTConfig):
         """
@@ -32,9 +57,6 @@ class BaseAuth:
         prioritize the payload configuration.
         """
         self.conf = conf
-        # self.auth_method = auth_method
-        # self.retrieve_refresh_token = retrieve_refresh_token
-        # self.store_refresh_token = store_refresh_token
 
     def _get_secret_encode(self):
         """ because jwt allows the use of a simple secret or a pairs of keys 
@@ -94,7 +116,7 @@ class BaseAuth:
                              )
         return encoded
 
-    def decode(self, encoded, verify_signature=True, iss=None, aud=None) \
+    def decode(self, encoded, verify_signature=True, verify_exp=True, iss=None, aud=None) \
             -> Dict[str, Any]:
         _secret = self._get_secret_decode()
 
@@ -105,25 +127,13 @@ class BaseAuth:
                           _secret,
                           options={
                               "verify_signature": verify_signature,
+                              "verify_exp": verify_exp,
                               "require": self.conf.requires_claims
                           },
                           aud=_aud,
                           iss=_iss,
-                          algorithms=self.conf.alg
+                          algorithms=[self.conf.alg]
                           )
-
-    def init_app(self, app):
-        app.ctx.auth = self
-
-    def validate(self, token: str,
-                 required_scopes: Optional[List[str]],
-                 require_all=True,
-                 iss=None, aud=None
-                 ) -> Dict[str, Any]:
-        raise NotImplementedError()
-
-
-class Auth(BaseAuth):
 
     def validate(self, token: str,
                  required_scopes: Optional[List[str]],
@@ -134,7 +144,7 @@ class Auth(BaseAuth):
             decoded = self.decode(token, iss=iss, aud=aud)
             if required_scopes:
                 user_scopes: List[str] = decoded["scopes"]
-                valid = validate_scopes(required_scopes, user_scopes,
+                valid = scopes.validate(required_scopes, user_scopes,
                                         require_all=require_all)
                 if not valid:
                     raise AuthValidationFailed()
@@ -142,6 +152,20 @@ class Auth(BaseAuth):
             raise AuthValidationFailed()
 
         return decoded
+
+    async def refresh_token(self, redis, access_token, refresh_token) -> JWTResponse:
+        decoded = self.decode(access_token, verify_exp=False)
+        is_valid = await validate_refresh_token(redis, refresh_token, decoded["usr"])
+        if is_valid:
+            _new_refresh = await renew_refresh_token(redis, refresh_token, decoded["usr"])
+            _new_tkn = self.encode(decoded)
+            new_jwt = JWTResponse(access_token=_new_tkn,
+                                  refresh_token=_new_refresh)
+            return new_jwt
+        raise AuthValidationFailed()
+
+    async def store_refresh_token(self, redis, username: str) -> str:
+        return await store_refresh_token(redis, username)
 
     @classmethod
     def from_settings(cls, settings: Settings) -> Auth:
@@ -156,53 +180,3 @@ class Auth(BaseAuth):
             requires_claims=settings.JWT_REQUIRES_CLAIMS
         )
         return cls(conf)
-
-    async def authenticate(request: Request):
-        pass
-
-
-def scope2dict(scopes: List[str]) -> Dict[str, Set]:
-    """ Given a list of scopes like ["admin:write", "user:read"]
-    it will returns a dictionary where the namespace is the key and the actions
-    turns into a set """
-    permissions: Dict[str, Set] = {}
-    for s in scopes:
-        try:
-            ns, action = s.split(":", maxsplit=1)
-        except ValueError:
-            ns = s
-            action = "any"
-        ns = ns if ns else "any"
-        actions = {a for a in action.split(":")}
-        permissions[ns] = actions
-    return permissions
-
-
-def validate_scopes(scopes: List[str],
-                    user_scopes: List[str],
-                    require_all=True,
-                    require_all_actions=True) -> bool:
-    """ 
-    from sanic_jwt
-    the idea is to provide a scoped access to different resources
-    """
-    user_perms = scope2dict(user_scopes)
-    required = scope2dict(scopes)
-    names = {k for k in user_perms.keys()}
-    required_names = {k for k in required.keys()}
-    intersection = required_names.intersection(names)
-    if require_all:
-        if len(required_names) != len(intersection) \
-           and "any" not in required.keys():
-            return False
-    elif intersection == 0 and "any" not in required.keys():
-        return False
-
-    _match = 0
-    for ns in intersection:
-        actions_matched = required[ns].intersection(user_perms[ns])
-        if len(actions_matched) > 0 or "any" in required[ns]:
-            _match += 1
-    if _match == 0:
-        return False
-    return True

@@ -1,7 +1,9 @@
 import codecs
+import importlib.util
 import json
 import os
 import subprocess
+from importlib import import_module
 from pathlib import Path
 
 from changeme import defaults
@@ -58,3 +60,17 @@ def execute_cmd(cmd) -> str:
 def path_norm(fp):
     """Given a  filepath returns a normalized a path"""
     return str(Path(fp))
+
+
+def get_package_dir(pkg):
+    spec = importlib.util.find_spec(pkg)
+    return spec.submodule_search_locations[0]
+
+
+def get_from_module(fullpath):
+    splited = fullpath.rsplit(".", maxsplit=1)
+    mod_name = splited[0]
+    obj_name = splited[1]
+    mod = import_module(mod_name)
+    obj = getattr(mod, obj_name)
+    return obj

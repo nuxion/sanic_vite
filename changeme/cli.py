@@ -3,7 +3,8 @@ import os
 import click
 from rich.console import Console
 
-from changeme.commands.services import webcli, collectcli
+from changeme.commands.services import webcli
+from changeme.commands.manager import managercli
 
 
 def init_cli():
@@ -27,7 +28,7 @@ def init_cli():
 
     cli.add_command(version)
     cli.add_command(webcli)
-    cli.add_command(collectcli)
+    cli.add_command(managercli)
     return cli
 
 

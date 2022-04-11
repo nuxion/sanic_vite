@@ -1,6 +1,6 @@
 import json as std_json
 from importlib import import_module
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from sanic import Sanic
 from sanic.response import json
@@ -10,11 +10,15 @@ from changeme import defaults
 from changeme.html_render import Render
 from changeme.html_render.static import Static
 from changeme.html_render.vite import ViteAsset, ViteDev
-from changeme.security import Auth
+from changeme.security import AuthSpec, sanic_init_auth
 from changeme.types.config import Settings
-from changeme.utils import get_version, open_json, path_norm
+from changeme.utils import get_from_module, get_version, open_json, path_norm
 
 version = get_version("__version__.py")
+
+
+async def status_handler(request):
+    return json(dict(msg="We are ok", version=version))
 
 
 def init_blueprints(app, blueprints_allowed, package_dir):
@@ -38,14 +42,28 @@ def init_blueprints(app, blueprints_allowed, package_dir):
         app.blueprint(bp)
 
 
+def init_db(app: Sanic, settings: Settings):
+    from changeme.db.web import sanic_init_db
+    sanic_init_db(app, settings)
+
+
+def init_redis(app: Sanic, settings: Settings):
+    from changeme.redis import sanic_init_redis
+    sanic_init_redis(app, settings)
+
+
 def create_app(
         settings: Settings,
         services_bp: Optional[List[str]] = None,
         pages_bp: Optional[List[str]] = None,
         with_render=True,
         with_vite=False,
-        auth_bp=True,
+        with_db=True,
+        with_redis=True,
+        with_auth=True,
+        with_auth_bp=True,
 ) -> Sanic:
+    """ Factory pattern for the creation of a Sanic Web app """
 
     _app = Sanic(settings.SANIC_APP_NAME)
 
@@ -58,9 +76,18 @@ def create_app(
         if with_vite:
             render.add_vite(_app, settings)
 
-    # Extend(_app)
-    auth = Auth.from_settings(settings)
-    auth.init_app(_app)
+    if with_db:
+        init_db(_app, settings=settings)
+
+    if with_redis:
+        init_redis(_app, settings=settings)
+
+    if with_auth:
+        AuthClass = get_from_module(settings.AUTH_CLASS)
+        auth: AuthSpec = AuthClass.from_settings(settings)
+        sanic_init_auth(_app, auth, settings)
+    if with_auth and with_auth_bp:
+        init_blueprints(_app, ["auth"], "changeme.security")
 
     _app.ext.openapi.add_security_scheme(
         "token",
@@ -73,23 +100,11 @@ def create_app(
         init_blueprints(_app, services_bp, defaults.SANIC_SERVICES_DIR)
     if pages_bp:
         init_blueprints(_app, services_bp, defaults.SANIC_PAGES_DIR)
-    if auth_bp:
-        init_blueprints(_app, ["auth"], "changeme.security")
     # _app.ext.openapi.secured()
     _app.ext.openapi.secured("token")
 
     for _, v in settings.STATICFILES_DIRS.items():
         _app.static(v["uripath"], v["localdir"])
 
-    @_app.get("/status")
-    async def status_handler(request):
-        return json(dict(msg="We are ok", version=version))
-
-    @_app.get("/")
-    async def index_handler(request):
-        return json(dict(msg="We are ok"))
-
+    _app.add_route(status_handler, "/status")
     return _app
-
-
-# app = app_init()

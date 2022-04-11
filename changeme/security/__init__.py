@@ -1,2 +1,2 @@
-from .authentication import Auth
-from .web import get_auth, protected
+from .base import AuthSpec
+from .web import get_auth, protected, sanic_init_auth

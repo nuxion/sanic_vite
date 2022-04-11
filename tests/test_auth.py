@@ -4,9 +4,12 @@ from datetime import datetime, timedelta
 import jwt
 import pytest
 from changeme import defaults
-from changeme.security.authentication import Auth, scope2dict, validate_scopes
-from changeme.security.utils import load_auth_class, open_keys
-from changeme.types.config import Settings
+from changeme.security import scopes
+from changeme.security.authentication import Auth
+from changeme.security.scopes import scope2dict
+from changeme.security.scopes import validate as validate_scopes
+from changeme.security.utils import open_keys
+from changeme.types import Settings
 from changeme.types.security import JWTConfig, KeyPairs
 
 
@@ -40,8 +43,8 @@ def test_auth_Auth_from_settings():
 
 
 def test_auth_scope2dict():
-    scopes = ["user", "admin:read:write", ":read:write"]
-    dict_ = scope2dict(scopes)
+    _scopes = ["user", "admin:read:write", ":read:write"]
+    dict_ = scopes.scope2dict(scopes)
 
     assert "user" in dict_.keys()
     assert "admin" in dict_.keys()
@@ -107,8 +110,3 @@ def test_auth_validate_scopes():
     assert valid9
     assert not valid10
     assert not valid11  # review
-
-
-def test_auth_utils_load():
-    A = load_auth_class("changeme.security.authentication.Auth")
-    assert type(A) == type(Auth)

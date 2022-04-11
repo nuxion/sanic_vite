@@ -50,17 +50,25 @@ def run_vite():
 @click.option(
     "--access-log", "-L", default=False, is_flag=True, help="Enable access_log"
 )
+@click.option(
+    "--with-auth-bp", "-E", default=True, is_flag=True, help="Enable authentication endpoints"
+)
 @click.option("--debug", "-D", default=False, is_flag=True, help="Enable Auto reload")
-def webcli(host, port, workers, services, pages, auto_reload, access_log, debug, vite_server):
+def webcli(host, port, workers, services, pages, auto_reload, access_log, debug,
+           with_auth_bp,
+           vite_server):
     """Run Web Server"""
     # pylint: disable=import-outside-toplevel
     from changeme.server import create_app
-    from changeme.types.config import Settings
+    from changeme.types import Settings
 
     pwd = os.getcwd()
-    console.print(f"PWD: {pwd}")
     settings = Settings(BASE_PATH=pwd)
+    console.print(f"BASE_PATH: {settings.BASE_PATH}")
     settings.TEMPLATES_DIR = f"{pwd}/templates"
+    console.print(f"TEMPLATES_DIR: {settings.TEMPLATES_DIR}")
+    console.print(f"Debug mode: {debug}")
+
     services_bp = None
     if services:
         services_bp = services.split(",")
@@ -69,70 +77,37 @@ def webcli(host, port, workers, services, pages, auto_reload, access_log, debug,
     if pages:
         pages_bp = pages.split(",")
 
-    app = create_app(settings, services_bp=services_bp, pages_bp=pages_bp, with_vite=True)
+    app = create_app(settings, services_bp=services_bp,
+                     pages_bp=pages_bp, with_vite=True, with_auth_bp=with_auth_bp)
     w = int(workers)
-    console.print(f"Debug mode: {debug}")
-    if not vite_server:
-        app.run(
-            host=host,
-            port=int(port),
-            workers=w,
-            auto_reload=auto_reload,
-            debug=debug,
-            access_log=access_log,
-        )
-    else:
-        keywords = dict(
-            host=host,
-            port=int(port),
-            workers=w,
-            auto_reload=auto_reload,
-            debug=debug,
-            access_log=access_log,
-        )
-        vite = mp.Process(target=run_vite)
-        sanic = mp.Process(target=run_sanic, args=(app,), kwargs=keywords)
-        vite.start()
-        sanic.start()
-        vite.join()
-        sanic.join()
-
-
-@click.option(
-    "--vite-build", "-v", default=True, is_flag=True, help="Also do a yarn build"
-)
-@click.command(name="collectstatic")
-@click.argument("outputdir")
-def collectcli(outputdir, vite_build):
-    """ Collects statics files into one folder """
-    from changeme.types.config import Settings
-    root = Path.cwd()
-    settings = Settings(BASE_PATH=str(root))
-
-    output = root / outputdir
-    if output.exists():
-        # console.print(f"[bold red]{output} dir will be deleted[/]")
-        should_del = Confirm.ask(
-            f"{output} dir will be deleted, continue?", default=True)
-        if should_del:
-            shutil.rmtree(output)
-        else:
-            console.print(f"[bold red]Anything collected[/]")
-            sys.exit()
-
-    breakpoint()
-    for _, v in settings.STATICFILES_DIRS.items():
-        dst = Path(f"{output}/{v['localdir']}")
-        console.print(f"Copying from {v['localdir']} to {dst}")
-        shutil.copytree(v['localdir'], str(dst))
-        # for file_or_dir in Path(v).glob("**/*"):
-        #    print(file_or_dir)
-
-    if vite_build:
-        res = execute_cmd("yarn build")
-        console.print(res)
-
-    dst = Path(f"{output}/{settings.VITE_BASE}")
-
-    console.print(f"Copying from {settings.VITE_OUTPUT_DIR} to {dst}")
-    shutil.copytree(settings.VITE_OUTPUT_DIR, str(dst))
+    app.run(
+        host=host,
+        port=int(port),
+        access_log=access_log,
+        workers=w,
+        debug=debug
+    )
+    # if not vite_server:
+    #     app.run(
+    #         host=host,
+    #         port=int(port),
+    #         workers=w,
+    #         auto_reload=auto_reload,
+    #         debug=debug,
+    #         access_log=access_log,
+    #     )
+    # else:
+    #     keywords = dict(
+    #         host=host,
+    #         port=int(port),
+    #         workers=w,
+    #         auto_reload=auto_reload,
+    #         debug=debug,
+    #         access_log=access_log,
+    #     )
+    #     vite = mp.Process(target=run_vite)
+    #     sanic = mp.Process(target=run_sanic, args=(app,), kwargs=keywords)
+    #     vite.start()
+    #     sanic.start()
+    #     vite.join()
+    #     sanic.join()

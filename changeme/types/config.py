@@ -1,15 +1,20 @@
+from pathlib import PosixPath, WindowsPath
 from typing import Any, Dict, List, Optional, Union
 
 from changeme import defaults
-from pydantic import BaseSettings
+from pydantic import BaseSettings, RedisDsn
 
 from .security import JWTConfig
 
 
 class Settings(BaseSettings):
-    BASE_PATH: str
+    BASE_PATH: Union[str, PosixPath, WindowsPath]
     LISTEN_ADDR: str = "localhost:8000"
 
+    SQL: str = "sqlite:///sqlite.db"
+    ASQL: str = "sqlite+aiosqlite:///sqlite.db"
+    REDIS_WEB: RedisDsn = "redis://localhost:6379/0"
+    REDIS_WEB_POOL_SIZE: int = 10
     TEMPLATES_DIR: Optional[str] = None
     TEMPLATES_PACKAGE_NAME: Optional[str] = None
     DEV_MODE: bool = False
@@ -35,11 +40,16 @@ class Settings(BaseSettings):
     JWT_SECRET: Optional[str] = None
     JWT_ISS: Optional[str] = None
     JWT_AUD: Optional[str] = None
+    AUTH_SALT: str = "changeit"
+    AUTH_ALLOW_REFRESH: bool = True
     AUTH_CLASS = "changeme.security.authentication.Auth"
+    AUTH_FUNCTION = "changeme.security.web.authenticate"
 
     CORS_ORIGINS: Union[List, str] = "*"
     CORS_ALLOW_HEADERS: Union[List, str] = "*"
     SANIC_APP_NAME = defaults.SANIC_APP_NAME
+    SETTINGS_MODULE: Optional[str] = None
+    DB_MODELS: Optional[List[str]] = ["changeme.models.user"]
 
     class Config:
         env_prefix = "CHANGEME_"
