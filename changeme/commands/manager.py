@@ -9,7 +9,7 @@ from pathlib import Path
 import click
 from changeme.conf import load_settings
 from changeme.db.sync import SQL
-from changeme.db.utils import alembic_ugprade
+from changeme.db.utils import alembic_revision, alembic_ugprade
 from changeme.managers import users_mg
 from changeme.types.user import UserOrm
 from changeme.utils import execute_cmd, mkdir_p
@@ -66,14 +66,14 @@ def collectcli(outputdir, vite_build):
 
 @managercli.command(name="db")
 @click.option("--sql", "-s", default=settings.SQL, help="SQL Database")
-@click.argument("action", type=click.Choice(["create", "drop", "upgrade"]))
-def dbcli(sql, action):
+@click.option("--message", "-m", default=None, help="Revision name")
+@click.option("--rev-id", "-R", help="Revision id")
+@click.option("--migration", "-M", help="Migration name defined in settings")
+@click.argument("action", type=click.Choice(["create", "drop", "upgrade", "revision"]))
+def dbcli(sql, action, message, rev_id, migration):
     """Create or Drop tables from a database"""
     db = SQL(sql)
     settings.SQL = sql
-    os.environ["CHANGEME_SQL"] = sql
-
-    models = [importlib.import_module(mod) for mod in settings.DB_MODELS]
 
     if action == "create":
         db.create_all()
@@ -82,9 +82,33 @@ def dbcli(sql, action):
         db.drop_all()
         click.echo("Droped...")
     elif action == "upgrade":
-        alembic_ugprade(sql)
+        if migration:
+            m = settings.MIGRATIONS[migration]
+            alembic_ugprade(sql, m)
+        else:
+            for k, m in settings.MIGRATIONS.items():
+                console.print(f"[bold magenta]Upgrading {k}[/]")
+                alembic_ugprade(sql, m)
+
+    elif action == "revision":
+        if migration:
+            m = settings.MIGRATIONS[migration]
+            alembic_revision(
+                sql,
+                rev_id,
+                message,
+                m)
+        else:
+            for k, m in settings.MIGRATIONS.items():
+                console.print(f"[bold magenta]Migrating {k}[/]")
+                alembic_revision(
+                    sql,
+                    rev_id,
+                    message,
+                    m)
+
     else:
-        click.echo("Wrong param...")
+        console.print("[red bold]Wrong param...[/]")
 
 
 @managercli.command(name="users")

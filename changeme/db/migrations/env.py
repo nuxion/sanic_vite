@@ -1,20 +1,16 @@
-import importlib
 from logging.config import fileConfig
 
 from alembic import context
-from changeme.conf import load_settings
 from changeme.db.common import Base
 from sqlalchemy import engine_from_config, pool
 
-settings = load_settings()
-
-models = [importlib.import_module(mod) for mod in settings.DB_MODELS]
 
 # auth_mod = importlib.import_module("nb_workflows.auth.models")
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+version_table = config.get_main_option("version_table")
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -50,7 +46,7 @@ def run_migrations_offline():
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        version_table="nb_workflows_version",
+        version_table=version_table,
     )
 
     with context.begin_transaction():
@@ -65,7 +61,7 @@ def run_migrations_online():
 
     """
     cfg = config.get_section(config.config_ini_section)
-    cfg["sqlalchemy.url"] = settings.SQL
+    # cfg["sqlalchemy.url"] = settings.SQL
 
     connectable = engine_from_config(
         cfg,
@@ -77,7 +73,7 @@ def run_migrations_online():
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            version_table="nb_workflows_version",
+            version_table=version_table,
         )
 
         with context.begin_transaction():

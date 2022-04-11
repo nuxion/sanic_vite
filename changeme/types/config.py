@@ -2,9 +2,15 @@ from pathlib import PosixPath, WindowsPath
 from typing import Any, Dict, List, Optional, Union
 
 from changeme import defaults
-from pydantic import BaseSettings, RedisDsn
+from pydantic import BaseModel, BaseSettings, RedisDsn
 
 from .security import JWTConfig
+
+
+class Migration(BaseModel):
+    models: List[str]
+    migrations_module: str
+    version_table: str 
 
 
 class Settings(BaseSettings):
@@ -44,12 +50,12 @@ class Settings(BaseSettings):
     AUTH_ALLOW_REFRESH: bool = True
     AUTH_CLASS = "changeme.security.authentication.Auth"
     AUTH_FUNCTION = "changeme.security.web.authenticate"
+    MIGRATIONS: Dict[str, Migration] = {}
 
     CORS_ORIGINS: Union[List, str] = "*"
     CORS_ALLOW_HEADERS: Union[List, str] = "*"
     SANIC_APP_NAME = defaults.SANIC_APP_NAME
     SETTINGS_MODULE: Optional[str] = None
-    DB_MODELS: Optional[List[str]] = ["changeme.models.user"]
 
     class Config:
         env_prefix = "CHANGEME_"

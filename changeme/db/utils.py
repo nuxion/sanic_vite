@@ -1,68 +1,50 @@
-from dataclasses import dataclass
+import importlib
+from typing import List
 
 from alembic import command
 from alembic.config import Config as AlembicConfig
-from sqlalchemy import func, select
-from sqlalchemy.sql.selectable import Select
+from changeme import defaults
+from changeme.types.config import Migration
 from changeme.utils import get_package_dir
 
 
-@dataclass
-class PageCalc:
-    limit: int
-    offset: int
-    next_page: int
-
-
-@dataclass
-class Pagination:
-    total: int
-    limit: int
-    page: int
-
-
-async def get_total_async(session, Model):
-    """Should be made in a context manager"""
-    stmt = select(func.count(Model.id))
-    _total = await session.execute(stmt)
-    total = _total.scalar()
-
-    return total
-
-
-def get_total(session, Model):
-    """Should be made in a context manager"""
-    stmt = select(func.count(Model.id))
-    _total = session.execute(stmt)
-    total = _total.scalar()
-
-    return total
-
-
-def pagination(s: Select, p: Pagination):
-
-    offset = p.limit * (p.page - 1)
-    next_page = p.page + 1
-    next_offset = p.limit * p.page
-    if next_offset >= p.total:
-        next_page = -1
-    stmt = s.limit(p.limit).offset(offset)
-    return stmt, next_page
-
-
-def calculate_page(total, limit, page) -> PageCalc:
-    offset = limit * (page - 1)
-    next_page = page + 1
-    next_offset = limit * page
-    if next_offset >= total:
-        next_page = -1
-    return PageCalc(limit=limit, offset=offset, next_page=next_page)
-
-
-def alembic_ugprade(dburi, to="head"):
-    dir_ = get_package_dir("changeme.db")
+def alembic_config(dburi: str,
+                   version_table: str,
+                   models_name: List[str],
+                   migrations_module=defaults.MIGRATIONS_PKG) -> AlembicConfig:
+    dir_ = get_package_dir(defaults.MIGRATIONS_PKG)
     alembic_file = f"{dir_}/alembic.ini"
+    models = [importlib.import_module(mod) for mod in models_name]
 
     alembic_cfg = AlembicConfig(alembic_file)
+    alembic_cfg.set_main_option("script_locations", migrations_module)
+    alembic_cfg.set_main_option("version_table", version_table)
     alembic_cfg.set_main_option("sqlalchemy.url", dburi)
-    command.upgrade(alembic_cfg, to)
+    return alembic_cfg
+
+
+def alembic_ugprade(dburi: str,
+                    migration: Migration,
+                    to="head"):
+
+    cfg = alembic_config(
+        dburi,
+        migration.version_table,
+        migration.models,
+        migrations_module=migration.migrations_module)
+    command.upgrade(cfg, to)
+
+
+def alembic_revision(dburi: str,
+                     rev_id: str,
+                     message: str,
+                     migration: Migration,
+                     autogenerate=True):
+    cfg = alembic_config(dburi, migration.version_table, migration.models,
+                         migrations_module=migration.migrations_module)
+
+    command.revision(
+        cfg,
+        message=message,
+        rev_id=rev_id,
+        autogenerate=autogenerate)
